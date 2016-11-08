@@ -64,10 +64,25 @@ i32 main(i32 argc, char* argv[]) {
 	SDL_Window* window = SDL_CreateWindow("Gambling", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1024, 720, SDL_WINDOW_OPENGL);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-	SDL_Surface* surface = SDL_LoadBMP("../assets/test.bmp");
-	SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+	SDL_Surface* surface1 = SDL_LoadBMP("../assets/test.bmp");
+	SDL_Texture* texture1 = SDL_CreateTextureFromSurface(renderer, surface1);
 
-	SDL_FreeSurface(surface);
+	SDL_FreeSurface(surface1);
+
+    // SDL_Surface* surface2 = SDL_LoadBMP("../assets/smallface.bmp");
+	// SDL_Texture* texture2 = SDL_CreateTextureFromSurface(renderer, surface2);
+
+	// SDL_FreeSurface(surface2);
+
+    // SDL_Surface* surface3 = SDL_LoadBMP("../assets/VQ5XP.bmp");
+	// SDL_Texture* texture3 = SDL_CreateTextureFromSurface(renderer, surface3);
+
+	// SDL_FreeSurface(surface3);
+
+    // SDL_Surface* surface4 = SDL_LoadBMP("../assets/not_yet.bmp");
+	// SDL_Texture* texture4 = SDL_CreateTextureFromSurface(renderer, surface4);
+
+	// SDL_FreeSurface(surface4);
 
     printf("Slot machine started\n");
     srand(time(NULL));
@@ -163,9 +178,21 @@ i32 main(i32 argc, char* argv[]) {
             // printf("Right diagonal, new score: %u\n", score);
         }
 
-		SDL_Rect rect = { x++, 10, 64, 64 };
-		SDL_RenderCopy(renderer, texture, NULL, &rect);
+		SDL_Rect rect1 = { x++, 10, 64, 64 };
+		SDL_RenderCopy(renderer, texture1, NULL, &rect1);
 		SDL_RenderPresent(renderer);
+
+        // SDL_Rect rect2 = { x++, 100, 64, 64 };
+		// SDL_RenderCopy(renderer, texture2, NULL, &rect2);
+		// SDL_RenderPresent(renderer);
+
+        // SDL_Rect rect3 = { x++, 200, 64, 64 };
+		// SDL_RenderCopy(renderer, texture3, NULL, &rect3);
+		// SDL_RenderPresent(renderer);
+
+        // SDL_Rect rect4 = { x++, 300, 64, 64 };
+		// SDL_RenderCopy(renderer, texture4, NULL, &rect4);
+		// SDL_RenderPresent(renderer);
     }
     
     // printf("Slot machine ended\n");
