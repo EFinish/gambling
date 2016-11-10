@@ -23,10 +23,30 @@ typedef double r64;
 #define COLUMN_SIZE 10
 #define array_count(array) (sizeof(array) / sizeof(array[0]))
 
+#define PIXELS_PER_UNIT 32.0f
+
+struct v2 {
+    r32 x;
+    r32 y;
+};
+
 struct Slot {
-    const char* name;
+    SDL_Texture* texture;
+    v2 position;
+    v2 size;
     u32 points;
 };
+
+void draw_slot(Slot* slot, SDL_Renderer* renderer) {
+    SDL_Rect rect = { 
+        (i32)(slot->position.x * PIXELS_PER_UNIT), 
+        (i32)(slot->position.y * PIXELS_PER_UNIT), 
+        (i32)(slot->size.x * PIXELS_PER_UNIT), 
+        (i32)(slot->size.y * PIXELS_PER_UNIT) 
+    };
+
+    SDL_RenderCopy(renderer, slot->texture, NULL, &rect);
+}
 
 Slot* get_previous_slot(Slot** slots, u32 slots_count, u32 slot_index) {
     assert(slot_index >= 0 && slot_index < slots_count);
@@ -64,35 +84,45 @@ i32 main(i32 argc, char* argv[]) {
 	SDL_Window* window = SDL_CreateWindow("Gambling", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1024, 720, SDL_WINDOW_OPENGL);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-	SDL_Surface* surface1 = SDL_LoadBMP("../assets/test.bmp");
-	SDL_Texture* texture1 = SDL_CreateTextureFromSurface(renderer, surface1);
+	SDL_Surface* bell = SDL_LoadBMP("../assets/bell.bmp");
+	SDL_Texture* bellTexture = SDL_CreateTextureFromSurface(renderer, bell);
+	SDL_FreeSurface(bell);
 
-	SDL_FreeSurface(surface1);
+    SDL_Surface* cherry = SDL_LoadBMP("../assets/cherry.bmp");
+	SDL_Texture* cherryTexture = SDL_CreateTextureFromSurface(renderer, cherry);
+	SDL_FreeSurface(cherry);
 
-    // SDL_Surface* surface2 = SDL_LoadBMP("../assets/smallface.bmp");
-	// SDL_Texture* texture2 = SDL_CreateTextureFromSurface(renderer, surface2);
+    SDL_Surface* jewel = SDL_LoadBMP("../assets/jewel.bmp");
+	SDL_Texture* jewelTexture = SDL_CreateTextureFromSurface(renderer, jewel);
+	SDL_FreeSurface(jewel);
 
-	// SDL_FreeSurface(surface2);
+    SDL_Surface* orange = SDL_LoadBMP("../assets/orange.bmp");
+	SDL_Texture* orangeTexture = SDL_CreateTextureFromSurface(renderer, orange);
+	SDL_FreeSurface(orange);
 
-    // SDL_Surface* surface3 = SDL_LoadBMP("../assets/VQ5XP.bmp");
-	// SDL_Texture* texture3 = SDL_CreateTextureFromSurface(renderer, surface3);
+    SDL_Surface* seven = SDL_LoadBMP("../assets/seven.bmp");
+	SDL_Texture* sevenTexture = SDL_CreateTextureFromSurface(renderer, seven);
+	SDL_FreeSurface(seven);
 
-	// SDL_FreeSurface(surface3);
+    SDL_Surface* singleBar = SDL_LoadBMP("../assets/singleBar.bmp");
+	SDL_Texture* singleBarTexture = SDL_CreateTextureFromSurface(renderer, singleBar);
+	SDL_FreeSurface(singleBar);
 
-    // SDL_Surface* surface4 = SDL_LoadBMP("../assets/not_yet.bmp");
-	// SDL_Texture* texture4 = SDL_CreateTextureFromSurface(renderer, surface4);
-
-	// SDL_FreeSurface(surface4);
+    SDL_Surface* tripleBar = SDL_LoadBMP("../assets/tripleBar.bmp");
+	SDL_Texture* tripleBarTexture = SDL_CreateTextureFromSurface(renderer, tripleBar);
+	SDL_FreeSurface(tripleBar);
 
     printf("Slot machine started\n");
     srand(time(NULL));
         
     Slot slots[] = {
-        { "7", 100 },
-        { "Cherry", 25 },
-        { "Lemon", 75 },
-        { "Orange", 50 },
-        { "Bar", 10 }
+        { bellTexture, 100, 100, 35},
+        { cherryTexture, 100, 100, 20},
+        { jewelTexture, 100, 100, 85},
+        { orangeTexture, 100, 100, 50},
+        { sevenTexture, 100, 100, 100},
+        { singleBarTexture, 100, 100, 0},
+        { tripleBarTexture, 100, 100, 10}
     };
     
     Slot* column_1[COLUMN_SIZE];
@@ -108,8 +138,18 @@ i32 main(i32 argc, char* argv[]) {
     u32 score = 0;
 	i32 x = 0;
     
+    u64 timer_frequency = SDL_GetPerformanceFrequency();
+    u64 last_time = SDL_GetPerformanceCounter();
+
+    v2 position = {};
+
     bool is_running = true;
     while (is_running) {
+        u64 current_time = SDL_GetPerformanceCounter();
+        
+        r32 delta_time = (r32)(current_time - last_time) / (r32)timer_frequency;
+        last_time = current_time;
+
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT) {
@@ -136,17 +176,12 @@ i32 main(i32 argc, char* argv[]) {
         board[2][0] = get_previous_slot(column_3, COLUMN_SIZE, column_3_index);
         board[2][1] = column_3[column_3_index];
         board[2][2] = get_next_slot(column_3, COLUMN_SIZE, column_3_index);
-        
-        printf("%s\t\t%s\t\t%s\n%s\t\t%s\t\t%s\n%s\t\t%s\t\t%s\n\n",
-            board[0][0]->name,
-            board[1][0]->name,
-            board[2][0]->name,
-            board[0][1]->name,
-            board[1][1]->name,
-            board[2][1]->name,
-            board[0][2]->name,
-            board[1][2]->name,
-            board[2][2]->name);
+
+        for (u32 i = 0; i < 3; i++) {
+            for (u32 j = 0; j < 3; j++) {
+                printf("%d",board[i][j]->points);
+            }
+        }
             
         if (board[0][1] == board[1][1]) {
             score += board[0][1]->points;
@@ -154,8 +189,6 @@ i32 main(i32 argc, char* argv[]) {
             if (board[0][1] == board[2][1]) {
                 score += board[0][1]->points;
             }
-
-            // printf("Horizontal, new score: %u\n", score);
         }
         
         if (board[0][0] == board[1][1]) {
@@ -164,8 +197,6 @@ i32 main(i32 argc, char* argv[]) {
             if (board[0][0] == board[2][2]) {
                 score += board[0][0]->points;
             }
-
-            // printf("Left diagonal, new score: %u\n", score);
         }
 
         if (board[0][2] == board[1][1]) {
@@ -174,27 +205,16 @@ i32 main(i32 argc, char* argv[]) {
             if (board[2][0] == board[0][2]) {
                 score += board[2][0]->points;
             }
-
-            // printf("Right diagonal, new score: %u\n", score);
         }
 
-		SDL_Rect rect1 = { x++, 10, 64, 64 };
-		SDL_RenderCopy(renderer, texture1, NULL, &rect1);
+        for (u32 i = 0; i < 3; i++) {
+            for (u32 j = 0; j < 3; j++) {
+                draw_slot(board[i][j], renderer);
+            }
+        }
+
 		SDL_RenderPresent(renderer);
-
-        // SDL_Rect rect2 = { x++, 100, 64, 64 };
-		// SDL_RenderCopy(renderer, texture2, NULL, &rect2);
-		// SDL_RenderPresent(renderer);
-
-        // SDL_Rect rect3 = { x++, 200, 64, 64 };
-		// SDL_RenderCopy(renderer, texture3, NULL, &rect3);
-		// SDL_RenderPresent(renderer);
-
-        // SDL_Rect rect4 = { x++, 300, 64, 64 };
-		// SDL_RenderCopy(renderer, texture4, NULL, &rect4);
-		// SDL_RenderPresent(renderer);
     }
     
-    // printf("Slot machine ended\n");
 	return 0;
 }
