@@ -23,29 +23,41 @@ typedef double r64;
 #define COLUMN_SIZE 10
 #define array_count(array) (sizeof(array) / sizeof(array[0]))
 
-#define PIXELS_PER_UNIT 32.0f
+#define SLOT_SIZE 128
 
 struct v2 {
-    r32 x;
-    r32 y;
+    i32 x;
+    i32 y;
 };
 
 struct Slot {
     SDL_Texture* texture;
-    v2 position;
-    v2 size;
-    u32 points;
+	u32 points;
+	
+	v2 position;
 };
 
 void draw_slot(Slot* slot, SDL_Renderer* renderer) {
     SDL_Rect rect = { 
-        (i32)(slot->position.x * PIXELS_PER_UNIT), 
-        (i32)(slot->position.y * PIXELS_PER_UNIT), 
-        (i32)(slot->size.x * PIXELS_PER_UNIT), 
-        (i32)(slot->size.y * PIXELS_PER_UNIT) 
+        slot->position.x, 
+        slot->position.y, 
+        SLOT_SIZE, 
+		SLOT_SIZE
     };
 
     SDL_RenderCopy(renderer, slot->texture, NULL, &rect);
+}
+
+SDL_Texture* load_texture(SDL_Renderer* renderer, char* file_name) {
+	SDL_Texture* result = NULL;
+
+	SDL_Surface* surface = SDL_LoadBMP(file_name);
+	assert(surface != NULL);
+
+	result = SDL_CreateTextureFromSurface(renderer, surface);
+	SDL_FreeSurface(surface);
+
+	return result;
 }
 
 Slot* get_previous_slot(Slot** slots, u32 slots_count, u32 slot_index) {
@@ -84,45 +96,38 @@ i32 main(i32 argc, char* argv[]) {
 	SDL_Window* window = SDL_CreateWindow("Gambling", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1024, 720, SDL_WINDOW_OPENGL);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-	SDL_Surface* bell = SDL_LoadBMP("../assets/bell.bmp");
-	SDL_Texture* bellTexture = SDL_CreateTextureFromSurface(renderer, bell);
-	SDL_FreeSurface(bell);
-
-    SDL_Surface* cherry = SDL_LoadBMP("../assets/cherry.bmp");
-	SDL_Texture* cherryTexture = SDL_CreateTextureFromSurface(renderer, cherry);
-	SDL_FreeSurface(cherry);
-
-    SDL_Surface* jewel = SDL_LoadBMP("../assets/jewel.bmp");
-	SDL_Texture* jewelTexture = SDL_CreateTextureFromSurface(renderer, jewel);
-	SDL_FreeSurface(jewel);
-
-    SDL_Surface* orange = SDL_LoadBMP("../assets/orange.bmp");
-	SDL_Texture* orangeTexture = SDL_CreateTextureFromSurface(renderer, orange);
-	SDL_FreeSurface(orange);
-
-    SDL_Surface* seven = SDL_LoadBMP("../assets/seven.bmp");
-	SDL_Texture* sevenTexture = SDL_CreateTextureFromSurface(renderer, seven);
-	SDL_FreeSurface(seven);
-
-    SDL_Surface* singleBar = SDL_LoadBMP("../assets/singleBar.bmp");
-	SDL_Texture* singleBarTexture = SDL_CreateTextureFromSurface(renderer, singleBar);
-	SDL_FreeSurface(singleBar);
-
-    SDL_Surface* tripleBar = SDL_LoadBMP("../assets/tripleBar.bmp");
-	SDL_Texture* tripleBarTexture = SDL_CreateTextureFromSurface(renderer, tripleBar);
-	SDL_FreeSurface(tripleBar);
-
     printf("Slot machine started\n");
     srand(time(NULL));
         
     Slot slots[] = {
-        { bellTexture, 100, 100, 35},
-        { cherryTexture, 100, 100, 20},
-        { jewelTexture, 100, 100, 85},
-        { orangeTexture, 100, 100, 50},
-        { sevenTexture, 100, 100, 100},
-        { singleBarTexture, 100, 100, 0},
-        { tripleBarTexture, 100, 100, 10}
+        { 
+			load_texture(renderer, "../assets/bell.bmp"), 
+			35
+		},
+        { 
+			load_texture(renderer, "../assets/cherry.bmp"),
+			20
+		},
+        { 
+			load_texture(renderer, "../assets/jewel.bmp"),
+			85
+		},
+        { 
+			load_texture(renderer, "../assets/orange.bmp"),
+			50 
+		},
+        { 
+			load_texture(renderer, "../assets/seven.bmp"),
+			100
+		},
+        { 
+			load_texture(renderer, "../assets/singleBar.bmp"),
+			2
+		},
+        { 
+			load_texture(renderer, "../assets/tripleBar.bmp"),
+			10
+		}
     };
     
     Slot* column_1[COLUMN_SIZE];
@@ -136,12 +141,12 @@ i32 main(i32 argc, char* argv[]) {
     }
 
     u32 score = 0;
-	i32 x = 0;
+	r32 play_timer = 0.0f;
     
+	Slot* board[3][3] = {};
+
     u64 timer_frequency = SDL_GetPerformanceFrequency();
     u64 last_time = SDL_GetPerformanceCounter();
-
-    v2 position = {};
 
     bool is_running = true;
     while (is_running) {
@@ -159,60 +164,68 @@ i32 main(i32 argc, char* argv[]) {
 
 		SDL_RenderClear(renderer);
 
-        u32 column_1_index = rand() % COLUMN_SIZE;
-        u32 column_2_index = rand() % COLUMN_SIZE;
-        u32 column_3_index = rand() % COLUMN_SIZE;
-        
-        Slot* board[3][3];
-        
-        board[0][0] = get_previous_slot(column_1, COLUMN_SIZE, column_1_index);
-        board[0][1] = column_1[column_1_index];
-        board[0][2] = get_next_slot(column_1, COLUMN_SIZE, column_1_index);
-        
-        board[1][0] = get_previous_slot(column_2, COLUMN_SIZE, column_2_index);
-        board[1][1] = column_2[column_2_index];
-        board[1][2] = get_next_slot(column_2, COLUMN_SIZE, column_2_index);
-        
-        board[2][0] = get_previous_slot(column_3, COLUMN_SIZE, column_3_index);
-        board[2][1] = column_3[column_3_index];
-        board[2][2] = get_next_slot(column_3, COLUMN_SIZE, column_3_index);
+		if ((play_timer -= delta_time) <= 0.0f) {
+			u32 column_1_index = rand() % COLUMN_SIZE;
+			u32 column_2_index = rand() % COLUMN_SIZE;
+			u32 column_3_index = rand() % COLUMN_SIZE;
 
-        for (u32 i = 0; i < 3; i++) {
-            for (u32 j = 0; j < 3; j++) {
-                printf("%d",board[i][j]->points);
-            }
-        }
-            
-        if (board[0][1] == board[1][1]) {
-            score += board[0][1]->points;
+			board[0][0] = get_previous_slot(column_1, COLUMN_SIZE, column_1_index);
+			board[0][1] = column_1[column_1_index];
+			board[0][2] = get_next_slot(column_1, COLUMN_SIZE, column_1_index);
 
-            if (board[0][1] == board[2][1]) {
-                score += board[0][1]->points;
-            }
-        }
+			board[0][0]->position = { 0, 0 };
+			board[0][1]->position = { 0, SLOT_SIZE };
+			board[0][2]->position = { 0, SLOT_SIZE * 2 };
+
+			board[1][0] = get_previous_slot(column_2, COLUMN_SIZE, column_2_index);
+			board[1][1] = column_2[column_2_index];
+			board[1][2] = get_next_slot(column_2, COLUMN_SIZE, column_2_index);
+
+			board[1][0]->position = { SLOT_SIZE, 0 };
+			board[1][1]->position = { SLOT_SIZE, SLOT_SIZE };
+			board[1][2]->position = { SLOT_SIZE, SLOT_SIZE * 2 };
+
+			board[2][0] = get_previous_slot(column_3, COLUMN_SIZE, column_3_index);
+			board[2][1] = column_3[column_3_index];
+			board[2][2] = get_next_slot(column_3, COLUMN_SIZE, column_3_index);
+
+			board[2][0]->position = { SLOT_SIZE * 2, 0 };
+			board[2][1]->position = { SLOT_SIZE * 2, SLOT_SIZE };
+			board[2][2]->position = { SLOT_SIZE * 2, SLOT_SIZE * 2 };
+
+			if (board[0][1] == board[1][1]) {
+				score += board[0][1]->points;
+
+				if (board[0][1] == board[2][1]) {
+					score += board[0][1]->points;
+				}
+			}
+
+			if (board[0][0] == board[1][1]) {
+				score += board[0][0]->points;
+
+				if (board[0][0] == board[2][2]) {
+					score += board[0][0]->points;
+				}
+			}
+
+			if (board[0][2] == board[1][1]) {
+				score += board[2][0]->points;
+
+				if (board[2][0] == board[0][2]) {
+					score += board[2][0]->points;
+				}
+			}
+
+			play_timer = 1.0f;
+		}
         
-        if (board[0][0] == board[1][1]) {
-            score += board[0][0]->points;
-            
-            if (board[0][0] == board[2][2]) {
-                score += board[0][0]->points;
-            }
-        }
-
-        if (board[0][2] == board[1][1]) {
-            score += board[2][0]->points;
-            
-            if (board[2][0] == board[0][2]) {
-                score += board[2][0]->points;
-            }
-        }
-
         for (u32 i = 0; i < 3; i++) {
             for (u32 j = 0; j < 3; j++) {
                 draw_slot(board[i][j], renderer);
             }
         }
-
+		
 		SDL_RenderPresent(renderer);
     }
     
