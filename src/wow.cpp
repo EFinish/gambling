@@ -31,11 +31,13 @@ SDL_Renderer* renderer;
 struct Symbol {
 	SDL_Texture* texture = NULL;
 	u32 points = 0;
+	i32 scroll_offset = 0;
 };
 
 Symbol symbol(char* file_name, u32 points) {
 	Symbol result;
 	result.points = points;
+	result.scroll_offset = 0;
 
 	SDL_Surface* surface = SDL_LoadBMP(file_name);
 	SDL_assert(surface != NULL);
@@ -128,6 +130,7 @@ i32 main(i32 argc, char* argv[]) {
 				for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
 					i32 symbol_index = rand() % SYMBOL_COUNT;
 					reel->symbols[j] = &symbols[symbol_index];
+					// reel->symbols[j]->scroll_offset = (j * SYMBOL_SIZE) + SYMBOL_PADDING;
 				}
 			}
 
@@ -149,7 +152,6 @@ i32 main(i32 argc, char* argv[]) {
 
 			play_timer = 1.0f;
 		}
-        // for(u32 time = 1000; time > 0; time)
 		for (u32 i = 0; i < REEL_COUNT; i++) {
 			Reel* reel = &reels[i];
 
@@ -157,10 +159,15 @@ i32 main(i32 argc, char* argv[]) {
 				Symbol* symbol = reel->symbols[j];
 
 				SDL_Rect symbol_rect; 
+
 				symbol_rect.x = reel->base_x; 
-				symbol_rect.y = reel->base_y + (j * (SYMBOL_SIZE + SYMBOL_PADDING)) + reel->scroll_offset;
 				symbol_rect.w = SYMBOL_SIZE; 
 				symbol_rect.h = SYMBOL_SIZE;
+				//Added code here for checking if reached limits of window
+				if(reel->base_y + symbol->scroll_offset > WINDOW_HEIGHT){
+					symbol->scroll_offset = 0;
+				}
+				symbol_rect.y = reel->base_y + symbol->scroll_offset++;
 
 				SDL_RenderCopy(renderer, symbol->texture, NULL, &symbol_rect);
 			}
@@ -174,10 +181,10 @@ i32 main(i32 argc, char* argv[]) {
 			SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
 			SDL_RenderFillRect(renderer, &base_rect);
 
-			reel->scroll_offset++;
-			if (reel->scroll_offset > 150.0f) {
-				reel->scroll_offset = 0;
-			}
+			// reel->scroll_offset++;
+			// if (reel->scroll_offset > 150.0f) {
+			// 	reel->scroll_offset = 0;
+			// }
 		}
 
 		// if (won) {
