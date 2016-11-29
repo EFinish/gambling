@@ -27,6 +27,18 @@ typedef double r64;
 SDL_Window* window;
 SDL_Renderer* renderer;
 
+r32 lerp(r32 a, r32 t, r32 b) {
+	return (1.0f - t) * a + t * b;
+}
+
+i32 random_choice(i32 c) {
+	return rand() % c;
+}
+
+r32 random_between(r32 min, r32 max) {
+	return lerp(min, (r32) rand() * (1.0f / (r32) RAND_MAX), max);
+}
+
 #define SYMBOL_COUNT 7
 #define SYMBOL_SIZE 128
 #define SYMBOL_PADDING 16
@@ -59,7 +71,42 @@ struct Reel {
 	i32 base_y = 0;
 
 	Symbol* symbols[REEL_SYMBOLS_COUNT];
+
+	r32 scroll_offset = 0.0f;
+	r32 scroll_velocity = 0.0f;
 };
+
+TTF_Font* font;
+
+struct Text {
+	SDL_Texture* texture;
+	SDL_Rect rect;
+};
+
+void change_text(Text* text, char* value) {
+	if (text->texture) {
+		SDL_DestroyTexture(text->texture);
+	}
+
+	SDL_Surface* surface = TTF_RenderText_Solid(font, value, { 255, 255, 255, 255 });
+
+	text->rect.w = surface->w;
+	text->rect.h = surface->h;
+
+	text->texture = SDL_CreateTextureFromSurface(renderer, surface);
+	SDL_FreeSurface(surface);
+}
+
+Text make_text(i32 x, i32 y, char* value) {
+	Text text;
+
+	text.rect.x = x;
+	text.rect.y = y;
+
+	change_text(&text, value);
+
+	return text;
+}
 
 i32 main(i32 argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -81,20 +128,10 @@ i32 main(i32 argc, char* argv[]) {
 
 	TTF_Init();
 	
-	TTF_Font* font = TTF_OpenFont("c:/windows/fonts/arial.ttf", 24);
+	font = TTF_OpenFont("c:/windows/fonts/arial.ttf", 24);
 	SDL_assert(font != NULL);
 
-	SDL_Surface* hello_world_surface = TTF_RenderText_Solid(font, "Hello, World!", { 255, 255, 255, 255 });
-	SDL_Texture* hello_world_texture = SDL_CreateTextureFromSurface(renderer, hello_world_surface);
-
-	SDL_Rect hello_world_rect;
-	hello_world_rect.x = 10;
-	hello_world_rect.y = 10;
-
-	hello_world_rect.w = hello_world_surface->w;
-	hello_world_rect.h = hello_world_surface->h;
-
-	SDL_FreeSurface(hello_world_surface);
+	Text score_text = make_text(10, 10, "0");
 
 	Symbol symbols[SYMBOL_COUNT];
 
@@ -118,16 +155,15 @@ i32 main(i32 argc, char* argv[]) {
 	reels[2].base_y = base_y;
 	
     u32 score = 0;
+	
 	bool won = false;
-
-	r32 scroll_offset = 0.0f;
-	r32 scroll_velocity = 0.0f;
+	bool is_spinning = false;
 
 	for (u32 i = 0; i < REEL_COUNT; i++) {
 		Reel* reel = &reels[i];
 
 		for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
-			i32 symbol_index = rand() % SYMBOL_COUNT;
+			i32 symbol_index = random_choice(SYMBOL_COUNT);
 			reel->symbols[j] = &symbols[symbol_index];
 		}
 	}
@@ -151,17 +187,21 @@ i32 main(i32 argc, char* argv[]) {
 				if (event.key.keysym.sym == SDLK_ESCAPE) {
 					is_running = false;
 				}
-				else if (event.key.keysym.sym == SDLK_SPACE) {
+				else if (event.key.keysym.sym == SDLK_w) {
 					for (u32 i = 0; i < REEL_COUNT; i++) {
 						Reel* reel = &reels[i];
 
 						for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
-							i32 symbol_index = rand() % SYMBOL_COUNT;
+							i32 symbol_index = random_choice(SYMBOL_COUNT);
 							reel->symbols[j] = &symbols[symbol_index];
 						}
 					}
-
-					scroll_velocity = 5000.0f;
+				}
+				else if (event.key.keysym.sym == SDLK_SPACE) {
+					for (u32 i = 0; i < REEL_COUNT; i++) {
+						reels[i].scroll_velocity = (random_choice(3) + 5) * 1000.0f;
+						is_spinning = true;
+					}
 				}
 			}
 		}
@@ -176,7 +216,7 @@ i32 main(i32 argc, char* argv[]) {
 		for (u32 i = 0; i < REEL_COUNT; i++) {
 			Reel* reel = &reels[i];
 
-			r32 offset = scroll_offset / (SYMBOL_SIZE + SYMBOL_PADDING);
+			r32 offset = reel->scroll_offset / (SYMBOL_SIZE + SYMBOL_PADDING);
 			i32 j = (i32) offset;
 
 			for (u32 k = 0; k < REEL_SYMBOLS_COUNT; k++) {
@@ -200,46 +240,41 @@ i32 main(i32 argc, char* argv[]) {
 
 				SDL_RenderCopy(renderer, symbol->texture, NULL, &symbol_rect);
 			}
+
+			reel->scroll_offset += reel->scroll_velocity * delta_time;
+			reel->scroll_velocity -= (2.0f * reel->scroll_velocity) * delta_time;
+
+			if (reel->scroll_offset > REEL_SYMBOLS_COUNT * (SYMBOL_SIZE + SYMBOL_PADDING)) {
+				reel->scroll_offset = 0.0f;
+			}
 		}
 
-		scroll_offset += scroll_velocity * delta_time;
-		scroll_velocity -= (1.0f * scroll_velocity) * delta_time;
+		if (is_spinning) {
+			bool all_have_stopped = true;
+			for (u32 i = 0; i < REEL_COUNT; i++) {
+				Reel* reel = &reels[i];
 
-		if (scroll_offset > REEL_SYMBOLS_COUNT * (SYMBOL_SIZE + SYMBOL_PADDING)) {
-			scroll_offset = 0.0f;
+				if (reel->scroll_velocity > 10.0f) {
+					all_have_stopped = false;
+				}
+				else {
+					reel->scroll_velocity = 0.0f;
+				}
+			}
+
+			if (all_have_stopped) {
+				// @todo(Ryan): Check for win conditions
+
+				char buffer[64];
+				sprintf(buffer, "%u", score += 10);
+
+				change_text(&score_text, buffer);
+
+				is_spinning = false;
+			}
 		}
 
-		if (scroll_velocity > 0.0f) {
-			
-		}
-		else {
-			// if (board[0][1]->slot == board[1][1]->slot && board[0][1]->slot == board[2][1]->slot) {
-			// 	won = true;
-			// 	score += board[0][1]->slot->points;
-			// }
-			// else {
-			// 	won = false;
-			// }
-
-			// if (board[0][0] == board[1][1] && board[0][0] == board[2][2]) {
-			// 	score += board[0][0]->slot->points;
-			// }
-
-			// if (board[0][2] == board[1][1] && board[2][0] == board[0][2]) {
-			// 	score += board[2][0]->slot->points;
-			// }
-		}
-
-		// if (won) {
-		// 	SDL_RenderDrawLine(renderer, 
-		// 		(WINDOW_WIDTH / 2) - (SLOT_SIZE + SLOT_PADDING),
-		// 		WINDOW_HEIGHT / 2,
-		// 		(WINDOW_WIDTH / 2) + (SLOT_SIZE + SLOT_PADDING),
-		// 		WINDOW_HEIGHT / 2);
-		// }
-
-		SDL_RenderCopy(renderer, hello_world_texture, NULL, &hello_world_rect);
-
+		SDL_RenderCopy(renderer, score_text.texture, NULL, &score_text.rect);
 		SDL_RenderPresent(renderer);
     }
     
