@@ -48,6 +48,20 @@ Symbol symbol(char* file_name, u32 points) {
 	return result;
 }
 
+struct Vector2 {
+	r32 x;
+	r32 y;
+};
+
+Vector2 make_vector2(r32 x, r32 y) {
+	Vector2 result;
+
+	result.x = x;
+	result.y = y;
+
+	return result;
+}
+
 #define REEL_COUNT 3
 #define REEL_SYMBOLS_COUNT 7
 
