@@ -1,0 +1,7 @@
+SLot Res
+x = 185
+y = 172
+
+whole image 
+x = 1600
+y = 900
