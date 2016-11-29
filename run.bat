@@ -1,6 +1,6 @@
 @echo off
 
-pushd build
-call wow.exe
+pushd assets
+call "../build/gambling.exe"
 
 popd
