@@ -1,6 +1,9 @@
 #include "../lib/sdl/sdl.h"
+#include "../lib/sdl/sdl_ttf.h"
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
 #include <time.h>
 
 typedef uint8_t u8;
@@ -48,30 +51,14 @@ Symbol symbol(char* file_name, u32 points) {
 	return result;
 }
 
-struct Vector2 {
-	r32 x;
-	r32 y;
-};
-
-Vector2 make_vector2(r32 x, r32 y) {
-	Vector2 result;
-
-	result.x = x;
-	result.y = y;
-
-	return result;
-}
-
 #define REEL_COUNT 3
 #define REEL_SYMBOLS_COUNT 7
 
 struct Reel {
 	i32 base_x = 0;
 	i32 base_y = 0;
-	i32 scroll_offset = 0;
 
 	Symbol* symbols[REEL_SYMBOLS_COUNT];
-	u32 index = 0;
 };
 
 i32 main(i32 argc, char* argv[]) {
@@ -92,6 +79,23 @@ i32 main(i32 argc, char* argv[]) {
 
 	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
+	TTF_Init();
+	
+	TTF_Font* font = TTF_OpenFont("c:/windows/fonts/arial.ttf", 24);
+	SDL_assert(font != NULL);
+
+	SDL_Surface* hello_world_surface = TTF_RenderText_Solid(font, "Hello, World!", { 255, 255, 255, 255 });
+	SDL_Texture* hello_world_texture = SDL_CreateTextureFromSurface(renderer, hello_world_surface);
+
+	SDL_Rect hello_world_rect;
+	hello_world_rect.x = 10;
+	hello_world_rect.y = 10;
+
+	hello_world_rect.w = hello_world_surface->w;
+	hello_world_rect.h = hello_world_surface->h;
+
+	SDL_FreeSurface(hello_world_surface);
+
 	Symbol symbols[SYMBOL_COUNT];
 
 	symbols[0] = symbol("bell.bmp", 35);
@@ -104,7 +108,7 @@ i32 main(i32 argc, char* argv[]) {
     
 	Reel reels[REEL_COUNT];
 
-	i32 base_y = (WINDOW_HEIGHT / 2) - ((SYMBOL_SIZE / 2) + SYMBOL_SIZE + SYMBOL_PADDING);
+	i32 base_y = -(SYMBOL_SIZE + SYMBOL_PADDING);
 
 	reels[0].base_x = (WINDOW_WIDTH / 2) - ((SYMBOL_SIZE / 2) + SYMBOL_SIZE + SYMBOL_PADDING);
 	reels[0].base_y = base_y;
@@ -114,8 +118,19 @@ i32 main(i32 argc, char* argv[]) {
 	reels[2].base_y = base_y;
 	
     u32 score = 0;
-	r32 play_timer = 0.0f;
 	bool won = false;
+
+	r32 scroll_offset = 0.0f;
+	r32 scroll_velocity = 0.0f;
+
+	for (u32 i = 0; i < REEL_COUNT; i++) {
+		Reel* reel = &reels[i];
+
+		for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
+			i32 symbol_index = rand() % SYMBOL_COUNT;
+			reel->symbols[j] = &symbols[symbol_index];
+		}
+	}
 
     u64 timer_frequency = SDL_GetPerformanceFrequency();
     u64 last_time = SDL_GetPerformanceCounter();
@@ -132,22 +147,72 @@ i32 main(i32 argc, char* argv[]) {
 			if (event.type == SDL_QUIT) {
 				is_running = false;
 			}
-		}
+			else if (event.type == SDL_KEYDOWN) {
+				if (event.key.keysym.sym == SDLK_ESCAPE) {
+					is_running = false;
+				}
+				else if (event.key.keysym.sym == SDLK_SPACE) {
+					for (u32 i = 0; i < REEL_COUNT; i++) {
+						Reel* reel = &reels[i];
 
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
+						for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
+							i32 symbol_index = rand() % SYMBOL_COUNT;
+							reel->symbols[j] = &symbols[symbol_index];
+						}
+					}
 
-		if ((play_timer -= delta_time) <= 0.0f) {
-			for (u32 i = 0; i < REEL_COUNT; i++) {
-				Reel* reel = &reels[i];
-
-				for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
-					i32 symbol_index = rand() % SYMBOL_COUNT;
-					reel->symbols[j] = &symbols[symbol_index];
-					// reel->symbols[j]->scroll_offset = (j * SYMBOL_SIZE) + SYMBOL_PADDING;
+					scroll_velocity = 5000.0f;
 				}
 			}
+		}
 
+		if (!is_running) {
+			break;
+		}
+
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+		SDL_RenderClear(renderer);
+
+		for (u32 i = 0; i < REEL_COUNT; i++) {
+			Reel* reel = &reels[i];
+
+			r32 offset = scroll_offset / (SYMBOL_SIZE + SYMBOL_PADDING);
+			i32 j = (i32) offset;
+
+			for (u32 k = 0; k < REEL_SYMBOLS_COUNT; k++) {
+				u32 l = 0;
+				if (j + k < REEL_SYMBOLS_COUNT) {
+					l = j + k;
+				}
+				else {
+					l = j + k - REEL_SYMBOLS_COUNT;
+				}
+
+				Symbol* symbol = reel->symbols[k];
+				SDL_Rect symbol_rect;
+
+				symbol_rect.x = reel->base_x;
+
+				r64 blegh;
+				symbol_rect.y = reel->base_y + (modf(offset, &blegh) * (SYMBOL_SIZE + SYMBOL_PADDING)) + (l * (SYMBOL_SIZE + SYMBOL_PADDING));
+				symbol_rect.w = SYMBOL_SIZE;
+				symbol_rect.h = SYMBOL_SIZE;
+
+				SDL_RenderCopy(renderer, symbol->texture, NULL, &symbol_rect);
+			}
+		}
+
+		scroll_offset += scroll_velocity * delta_time;
+		scroll_velocity -= (1.0f * scroll_velocity) * delta_time;
+
+		if (scroll_offset > REEL_SYMBOLS_COUNT * (SYMBOL_SIZE + SYMBOL_PADDING)) {
+			scroll_offset = 0.0f;
+		}
+
+		if (scroll_velocity > 0.0f) {
+			
+		}
+		else {
 			// if (board[0][1]->slot == board[1][1]->slot && board[0][1]->slot == board[2][1]->slot) {
 			// 	won = true;
 			// 	score += board[0][1]->slot->points;
@@ -163,42 +228,6 @@ i32 main(i32 argc, char* argv[]) {
 			// if (board[0][2] == board[1][1] && board[2][0] == board[0][2]) {
 			// 	score += board[2][0]->slot->points;
 			// }
-
-			play_timer = 1.0f;
-		}
-		for (u32 i = 0; i < REEL_COUNT; i++) {
-			Reel* reel = &reels[i];
-
-			for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
-				Symbol* symbol = reel->symbols[j];
-
-				SDL_Rect symbol_rect; 
-
-				symbol_rect.x = reel->base_x; 
-				symbol_rect.w = SYMBOL_SIZE; 
-				symbol_rect.h = SYMBOL_SIZE;
-				//Added code here for checking if reached limits of window
-				if(reel->base_y + symbol->scroll_offset > WINDOW_HEIGHT){
-					symbol->scroll_offset = 0;
-				}
-				symbol_rect.y = reel->base_y + symbol->scroll_offset++;
-
-				SDL_RenderCopy(renderer, symbol->texture, NULL, &symbol_rect);
-			}
-
-			SDL_Rect base_rect;
-			base_rect.x = reel->base_x - 8;
-			base_rect.y = reel->base_y - 8;
-			base_rect.w = 16;
-			base_rect.h = 16;
-
-			SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-			SDL_RenderFillRect(renderer, &base_rect);
-
-			// reel->scroll_offset++;
-			// if (reel->scroll_offset > 150.0f) {
-			// 	reel->scroll_offset = 0;
-			// }
 		}
 
 		// if (won) {
@@ -208,6 +237,8 @@ i32 main(i32 argc, char* argv[]) {
 		// 		(WINDOW_WIDTH / 2) + (SLOT_SIZE + SLOT_PADDING),
 		// 		WINDOW_HEIGHT / 2);
 		// }
+
+		SDL_RenderCopy(renderer, hello_world_texture, NULL, &hello_world_rect);
 
 		SDL_RenderPresent(renderer);
     }
