@@ -39,6 +39,39 @@ r32 random_between(r32 min, r32 max) {
     return lerp(min, (r32) rand() * (1.0f / (r32) RAND_MAX), max);
 }
 
+struct Texture {
+    u32 width;
+    u32 height;
+
+    SDL_Texture* handle;
+};
+
+Texture make_texture(char* file_name) {
+    Texture texture;
+
+    SDL_Surface* surface = SDL_LoadBMP(file_name);
+    
+    u32 key = SDL_MapRGB(surface->format, 255, 0, 255);
+    SDL_SetColorKey(surface, SDL_TRUE, key);
+
+    texture.width = surface->w;
+    texture.height = surface->h;
+
+    texture.handle = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    return texture;
+}
+
+void draw_texture(Texture* texture, i32 x, i32 y, i32 w, i32 h) {
+    SDL_Rect rect = { x, y, w, h };
+    SDL_RenderCopy(renderer, texture->handle, NULL, &rect);
+}
+
+void draw_texture(Texture* texture, i32 x, i32 y) {
+    draw_texture(texture, x, y, (i32) texture->width, (i32) texture->height);
+}
+
 #define SYMBOL_COUNT 7
 #define SYMBOL_SIZE 128
 #define SYMBOL_PADDING 16
@@ -84,16 +117,17 @@ struct Text {
 };
 
 void change_text(Text* text, char* value) {
-    if (text->texture) {
-        SDL_DestroyTexture(text->texture);
-    }
+    // if (text->texture) {
+    //     SDL_DestroyTexture(text->texture);
+    // }
 
-    SDL_Surface* surface = TTF_RenderText_Solid(font, value, { 255, 255, 255, 255 });
+    SDL_Surface* surface = TTF_RenderText_Blended(font, value, { 255, 255, 255, 255 });
 
     text->rect.w = surface->w;
     text->rect.h = surface->h;
 
     text->texture = SDL_CreateTextureFromSurface(renderer, surface);
+    
     SDL_FreeSurface(surface);
 }
 
@@ -106,6 +140,11 @@ Text make_text(i32 x, i32 y, char* value) {
     change_text(&text, value);
 
     return text;
+}
+
+void draw_text(Text* text) {
+    SDL_assert(text->texture != NULL);
+    SDL_RenderCopy(renderer, text->texture, NULL, &text->rect);
 }
 
 i32 main(i32 argc, char* argv[]) {
@@ -128,26 +167,27 @@ i32 main(i32 argc, char* argv[]) {
 
     TTF_Init();
     
-    font = TTF_OpenFont("c:/windows/fonts/arial.ttf", 24);
+    font = TTF_OpenFont("RioGrande.ttf", 42);
     SDL_assert(font != NULL);
 
-    Text score_text = make_text(10, 10, "0");
+    Texture background_texture = make_texture("overlay.bmp");
+    Text score_text = make_text(90, (WINDOW_HEIGHT / 2) + 90, "00000000");
 
     Symbol symbols[SYMBOL_COUNT];
 
-    symbols[0] = symbol("bell.bmp", 35);
-    symbols[1] = symbol("cherry.bmp", 20);
-    symbols[2] = symbol("jewel.bmp", 85);
-    symbols[3] = symbol("orange.bmp", 50);
-    symbols[4] = symbol("seven.bmp", 100);
-    symbols[5] = symbol("singleBar.bmp", 2);
-    symbols[6] = symbol("tripleBar.bmp", 10);
+    symbols[0] = symbol("slot_bell.bmp", 35);
+    symbols[1] = symbol("slot_cherry.bmp", 20);
+    symbols[2] = symbol("slot_jewel.bmp", 85);
+    symbols[3] = symbol("slot_orange.bmp", 50);
+    symbols[4] = symbol("slot_seven.bmp", 100);
+    symbols[5] = symbol("slot_singleBar.bmp", 2);
+    symbols[6] = symbol("slot_tripleBar.bmp", 10);
     
     Reel reels[REEL_COUNT];
 
     i32 base_y = -(SYMBOL_SIZE + SYMBOL_PADDING);
 
-    reels[0].base_x = (WINDOW_WIDTH / 2) - ((SYMBOL_SIZE / 2) + SYMBOL_SIZE + SYMBOL_PADDING);
+    reels[0].base_x = WINDOW_WIDTH - ((SYMBOL_SIZE + SYMBOL_PADDING) * 3) - 90;
     reels[0].base_y = base_y;
     reels[1].base_x = reels[0].base_x + SYMBOL_SIZE + SYMBOL_PADDING;
     reels[1].base_y = base_y;
@@ -199,7 +239,7 @@ i32 main(i32 argc, char* argv[]) {
                 }
                 else if (event.key.keysym.sym == SDLK_SPACE) {
                     for (u32 i = 0; i < REEL_COUNT; i++) {
-                        reels[i].scroll_velocity = (random_choice(3) + 5) * 1000.0f;
+                        reels[i].scroll_velocity = random_between(2500.0f, 5000.0f);
                         is_spinning = true;
                     }
                 }
@@ -233,8 +273,9 @@ i32 main(i32 argc, char* argv[]) {
 
                 symbol_rect.x = reel->base_x;
 
-                r64 blegh;
-                symbol_rect.y = reel->base_y + (modf(offset, &blegh) * (SYMBOL_SIZE + SYMBOL_PADDING)) + (l * (SYMBOL_SIZE + SYMBOL_PADDING));
+                r64 _;
+                symbol_rect.y = reel->base_y + (modf(offset, &_) * (SYMBOL_SIZE + SYMBOL_PADDING)) + (l * (SYMBOL_SIZE + SYMBOL_PADDING));
+
                 symbol_rect.w = SYMBOL_SIZE;
                 symbol_rect.h = SYMBOL_SIZE;
 
@@ -242,12 +283,40 @@ i32 main(i32 argc, char* argv[]) {
             }
 
             reel->scroll_offset += reel->scroll_velocity * delta_time;
-            reel->scroll_velocity -= (2.0f * reel->scroll_velocity) * delta_time;
+            reel->scroll_velocity -= (1.0f * reel->scroll_velocity) * delta_time;
 
             if (reel->scroll_offset > REEL_SYMBOLS_COUNT * (SYMBOL_SIZE + SYMBOL_PADDING)) {
                 reel->scroll_offset = 0.0f;
             }
+
+            if (reel->scroll_velocity > 0.0f && reel->scroll_velocity < 1000.0f) {
+                r32 offset = reel->scroll_offset / (SYMBOL_SIZE + SYMBOL_PADDING);
+                
+                r64 _;
+                r64 fraction = modf(offset, &_);
+
+                if (fraction > 0.9) {
+                    reel->scroll_offset = ceilf(offset) * (SYMBOL_SIZE + SYMBOL_PADDING);
+                    reel->scroll_velocity = 0.0f;
+                }
+                else if (fraction < 0.1) {
+                    reel->scroll_offset = floorf(offset) * (SYMBOL_SIZE + SYMBOL_PADDING);
+                    reel->scroll_velocity = 0.0f;
+                }
+            }
         }
+
+        draw_texture(&background_texture, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+        SDL_Rect rect;
+        rect.x = (WINDOW_WIDTH / 2) - 215;
+        rect.y = (WINDOW_HEIGHT / 2) + 30;
+
+        rect.w = 240;
+        rect.h = 90;
+
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderDrawRect(renderer, &rect);
 
         if (is_spinning) {
             bool all_have_stopped = true;
@@ -257,16 +326,13 @@ i32 main(i32 argc, char* argv[]) {
                 if (reel->scroll_velocity > 10.0f) {
                     all_have_stopped = false;
                 }
-                else {
-                    reel->scroll_velocity = 0.0f;
-                }
             }
 
             if (all_have_stopped) {
                 // @todo(Ryan): Check for win conditions
 
                 char buffer[64];
-                sprintf(buffer, "%u", score += 10);
+                sprintf(buffer, "%.8u", score += 10);
 
                 change_text(&score_text, buffer);
 
@@ -274,7 +340,8 @@ i32 main(i32 argc, char* argv[]) {
             }
         }
 
-        SDL_RenderCopy(renderer, score_text.texture, NULL, &score_text.rect);
+        draw_text(&score_text);
+
         SDL_RenderPresent(renderer);
     }
     
