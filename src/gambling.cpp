@@ -171,7 +171,7 @@ i32 main(i32 argc, char* argv[]) {
     SDL_assert(font != NULL);
 
     Texture background_texture = make_texture("overlay.bmp");
-    Text score_text = make_text(90, (WINDOW_HEIGHT / 2) + 90, "00000000");
+    Text score_text = make_text(140, (WINDOW_HEIGHT / 2) + 150, "00000000");
 
     Symbol symbols[SYMBOL_COUNT];
 
@@ -208,6 +208,22 @@ i32 main(i32 argc, char* argv[]) {
         }
     }
 
+    bool was_clicked = false;
+
+    SDL_Rect random_rect;
+    random_rect.x = (WINDOW_WIDTH / 2) - 215;
+    random_rect.y = (WINDOW_HEIGHT / 2) + 30;
+
+    random_rect.w = 240;
+    random_rect.h = 90;
+
+    SDL_Rect pull_rect;
+    pull_rect.x = random_rect.x;
+    pull_rect.y = random_rect.y + random_rect.h + 15;
+
+    pull_rect.w = random_rect.w;
+    pull_rect.h = random_rect.h;
+
     u64 timer_frequency = SDL_GetPerformanceFrequency();
     u64 last_time = SDL_GetPerformanceCounter();
 
@@ -227,27 +243,47 @@ i32 main(i32 argc, char* argv[]) {
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
                     is_running = false;
                 }
-                else if (event.key.keysym.sym == SDLK_w) {
-                    for (u32 i = 0; i < REEL_COUNT; i++) {
-                        Reel* reel = &reels[i];
-
-                        for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
-                            i32 symbol_index = random_choice(SYMBOL_COUNT);
-                            reel->symbols[j] = &symbols[symbol_index];
-                        }
-                    }
-                }
-                else if (event.key.keysym.sym == SDLK_SPACE) {
-                    for (u32 i = 0; i < REEL_COUNT; i++) {
-                        reels[i].scroll_velocity = random_between(2500.0f, 5000.0f);
-                        is_spinning = true;
-                    }
-                }
             }
         }
 
         if (!is_running) {
             break;
+        }
+
+        i32 x;
+        i32 y;
+        u32 buttons = SDL_GetMouseState(&x, &y);
+        if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            was_clicked = true;
+        }
+        else {
+            if (was_clicked) {
+                if (!is_spinning) {
+                    if (x > random_rect.x && x < random_rect.x + random_rect.w &&
+                        y > random_rect.y && y < random_rect.y + random_rect.h)
+                    {
+                        for (u32 i = 0; i < REEL_COUNT; i++) {
+                            Reel* reel = &reels[i];
+
+                            for (u32 j = 0; j < REEL_SYMBOLS_COUNT; j++) {
+                                i32 symbol_index = random_choice(SYMBOL_COUNT);
+                                reel->symbols[j] = &symbols[symbol_index];
+                            }
+                        }
+                    }
+
+                    if (x > pull_rect.x && x < pull_rect.x + pull_rect.w &&
+                        y > pull_rect.y && y < pull_rect.y + pull_rect.h)
+                    {
+                        for (u32 i = 0; i < REEL_COUNT; i++) {
+                            reels[i].scroll_velocity = random_between(2500.0f, 5000.0f);
+                            is_spinning = true;
+                        }
+                    }
+                }
+
+                was_clicked = false;
+            }
         }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
@@ -307,16 +343,6 @@ i32 main(i32 argc, char* argv[]) {
         }
 
         draw_texture(&background_texture, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-
-        SDL_Rect rect;
-        rect.x = (WINDOW_WIDTH / 2) - 215;
-        rect.y = (WINDOW_HEIGHT / 2) + 30;
-
-        rect.w = 240;
-        rect.h = 90;
-
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        SDL_RenderDrawRect(renderer, &rect);
 
         if (is_spinning) {
             bool all_have_stopped = true;
